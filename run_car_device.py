@@ -1,31 +1,36 @@
 from __init__ import logging
 from CarDevice import CarDevice
 from auxiliary_classes import TimerThread
-from threading import Event
-
-def main_car_device(car_dvc_obj):
-    if car_dvc_obj.broken:
-        logging.error("{},Fail! The car is broken".format(car_dvc_obj))
-        return
-    dtc = car_dvc_obj.run_get_dtc()
-    if dtc:
-        car_dvc_obj.register_failure(dtc)
-    else:
-        logging.info("{},Success! The car is good".format(car_dvc_obj))
-
-def start_timer_thread(car_dvc_obj):
-    thread = TimerThread(always, 1, main_car_device, car_dvc_obj)
-    thread.start()
-
-car_device_1 = CarDevice(car_id=1, brand='Ford', model='Ka')
-car_device_2 = CarDevice(car_id=2, brand='Volkswagen', model='Fusca')
-car_device_3 = CarDevice(car_id=3, brand='Fiat', model='Palio')
+from threading import Event, Lock
+from car_device_routines import main_car_device, push_to_server
+from simulator import probability_is_broken
 
 always = Event()
 
-start_timer_thread(car_device_1)
-start_timer_thread(car_device_2)
-start_timer_thread(car_device_3)
+def start_monitoring_thread(car_dvc_obj, timeout=10):
+    logging.info("{},Start monitoring thread".format(car_dvc_obj))
+    thread = TimerThread(car_dvc_obj.event, timeout, main_car_device, car_dvc_obj)
+    thread.start()
+
+def start_push_thread(car_dvc_obj, timeout=60):
+    logging.info("{},Start push_to_server thread".format(car_dvc_obj))
+    thread = TimerThread(car_dvc_obj.event, timeout, push_to_server, car_dvc_obj)
+    thread.start()
+
+def start_probability_thread(car_dvc_obj, timeout=5):
+    logging.info("{},Start probability_is_broken thread".format(car_dvc_obj))
+    thread = TimerThread(always, timeout, probability_is_broken, car_dvc_obj)
+    thread.start()
+  
+car_device_1 = CarDevice(car_id=1, brand='Ford', model='Ka')
+car_device_1.lock = Lock()
+car_device_1.event = Event()
+
+start_monitoring_thread(car_device_1, 5)
+start_push_thread(car_device_1, 30)
+start_probability_thread(car_device_1, 1)
 
 while True:
     pass
+
+
